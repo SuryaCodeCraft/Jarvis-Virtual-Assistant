@@ -1,0 +1,279 @@
+import sys
+import time
+import pyttsx3
+import speech_recognition as sr
+import datetime
+import os
+import cv2
+import random
+import winsound
+import pyjokes
+import wikipedia
+import webbrowser
+import pywhatkit as kit
+import threading
+
+# Initialize the text-to-speech engine
+engine = pyttsx3.init()
+voices = engine.getProperty('voices')
+engine.setProperty('voice', voices[0].id)  # Set to use the first available voice
+
+def speak(audio):
+    """Convert text to speech and print it."""
+    engine.say(audio)
+    print(audio)
+    engine.runAndWait()
+
+def take_command():
+    """Listen for a command and return it as a lowercase string."""
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Microphone detected. Listening...")
+        r.adjust_for_ambient_noise(source)  # Adjust to the ambient noise level
+        r.pause_threshold = 1
+        audio = r.listen(source, timeout=10, phrase_time_limit=10)
+
+    try:
+        print("Recognizing...")
+        query = r.recognize_google(audio, language='en-in')
+        print(f"Surya said: {query}")
+    except sr.UnknownValueError:
+        speak("Sorry, I did not understand that.")
+        return "none"
+    except sr.RequestError:
+        speak("Could not request results from the speech recognition service.")
+        return "none"
+    except Exception as e:
+        speak("Can you please say that again, sir?")
+        return "none"
+    return query.lower()
+
+def get_weather():
+    """Get hardcoded weather information for Bengaluru."""
+    weather_info = "26 degrees Celsius, partly cloudy with a slight chance of rain."
+    return weather_info
+
+def wish():
+    """Greet the user based on the time of day."""
+    hour = int(datetime.datetime.now().hour)
+    day = datetime.datetime.now().strftime("%A")  # Get current day
+    greeting = ""
+    if hour >= 0 and hour < 12:
+        greeting = "Good morning, sir!"
+    elif hour >= 12 and hour < 18:
+        greeting = "Good afternoon, sir!"
+    else:
+        greeting = "Good evening, sir!"
+
+    # Get current time
+    current_time = datetime.datetime.now().strftime("%I:%M %p")
+    weather = get_weather()  # Get the weather information
+    speak(f"{greeting} It's {current_time}, {day}. The weather in Bengaluru is {weather}.")
+    speak("Welcome back, sir! Jarvis is ready to help you.")
+
+def beep_alarm(max_beeps=5):
+    """Beep a maximum number of times every second until stopped."""
+    beep_duration = 200  # Duration of each beep in milliseconds
+    frequency = 1500     # Frequency of the beep in Hertz
+    while not stop_alarm_event.is_set():
+        for _ in range(max_beeps):  # Beep for a maximum number of times
+            winsound.Beep(frequency, beep_duration)
+            time.sleep(0.1)  # Brief pause between beeps
+        time.sleep(1)  # Wait for 1 second before the next round of beeping
+
+def set_alarm(alarm_time_str):
+    """Set an alarm that beeps continuously until stopped."""
+    global stop_alarm_event
+    stop_alarm_event = threading.Event()  # Create a threading event for stopping the alarm
+
+    try:
+        # Check for HH:MM or HHmm formats
+        if len(alarm_time_str) == 5 and alarm_time_str[2] == ':' and alarm_time_str.replace(':', '').isdigit():  # HH:MM format
+            alarm_time = datetime.datetime.strptime(alarm_time_str, "%H:%M")
+        elif len(alarm_time_str) == 4 and alarm_time_str.isdigit():  # HHmm format
+            alarm_time = datetime.datetime.strptime(alarm_time_str, "%H%M")
+        else:
+            raise ValueError("Invalid time format")
+
+        formatted_time = f"{alarm_time.hour} {alarm_time.minute} {alarm_time.strftime('%p')}"
+        speak(f"Alarm is set for {formatted_time}.")
+
+        while True:
+            current_time = datetime.datetime.now()
+            if current_time.hour == alarm_time.hour and current_time.minute == alarm_time.minute:
+                speak("Alarm ringing!")
+                alarm_thread = threading.Thread(target=beep_alarm)
+                alarm_thread.start()  # Start beeping in a separate thread
+
+                # Wait for the user to stop the alarm
+                while not stop_alarm_event.is_set():
+                    command = take_command().lower()
+                    if command == "stop alarm":
+                        stop_alarm_event.set()  # Signal to stop the alarm
+                        speak("The alarm has stopped. Wake up, sir! It's already time up. Let's get back to work.")
+                        break  # Exit the loop once the alarm is stopped
+            time.sleep(10)  # Check every 10 seconds for the alarm time
+
+    except ValueError as ve:
+        speak(str(ve))  # Speak out the error message for invalid time
+        speak("Please say the time in HH:MM or HHmm format.")
+
+def play_music():
+    """Play a random song from the music directory."""
+    music_dir = "C:\\music"  # Update with your music directory path
+    if os.path.exists(music_dir):
+        songs = os.listdir(music_dir)
+        if songs:
+            os.startfile(os.path.join(music_dir, random.choice(songs)))
+        else:
+            speak("The music directory is empty.")
+    else:
+        speak("Sorry, I couldn't find the music directory.")
+
+def search_wikipedia(query):
+    """Search Wikipedia for the provided query and speak the result."""
+    results = wikipedia.summary(query, sentences=3)
+    speak(results)
+
+def search_youtube(video_name):
+    """Search for a video on YouTube and play it."""
+    kit.playonyt(video_name)
+
+def google_search(query):
+    """Perform a Google search for the given query."""
+    webbrowser.open(f"https://www.google.com/search?q={query}")
+
+def get_ip_address():
+    """Retrieve and speak the user's IP address."""
+    ip_address = os.popen("curl ifconfig.me").read()
+    speak(f"Your IP address is {ip_address.strip()}")
+
+def open_whatsapp():
+    """Open WhatsApp Web in the browser."""
+    webbrowser.open("https://web.whatsapp.com")
+
+def open_facebook():
+    """Open Facebook in the browser."""
+    webbrowser.open("https://www.facebook.com")
+
+def restart_computer():
+    """Restart the computer."""
+    os.system("shutdown /r /t 1")
+
+def sleep_computer():
+    """Put the computer to sleep."""
+    os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
+
+def shutdown_computer():
+    """Shutdown the computer."""
+    os.system("shutdown /s /t 1")
+    speak("Shutting down the computer. Goodbye, sir!")
+
+def search_chatgpt(query):
+    """Search ChatGPT for the provided query."""
+    encoded_query = query.replace(" ", "%20")
+    chatgpt_url = f"https://chat.openai.com/chat?query={encoded_query}"
+    webbrowser.open(chatgpt_url)
+    speak(f"Searching ChatGPT for {query}.")
+
+def open_camera():
+    """Open the camera and display the video feed."""
+    speak("Opening camera.")
+    cap = cv2.VideoCapture(0)  # Open the default camera
+    if not cap.isOpened():
+        speak("Could not open the camera.")
+        return
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            speak("Failed to capture image.")
+            break
+        cv2.imshow("Camera", frame)  # Display the camera feed
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to exit the camera
+            break
+    cap.release()
+    cv2.destroyAllWindows()
+
+def close_application(app_name):
+    """Close the specified application by its name."""
+    if app_name.lower() == "notepad":
+        os.system("taskkill /f /im notepad.exe")
+        speak("Notepad has been closed.")
+    elif app_name.lower() == "calculator":
+        os.system("taskkill /f /im calc.exe")
+        speak("Calculator has been closed.")
+    elif app_name.lower() == "music":
+        os.system("taskkill /f /im wmplayer.exe")  # Assuming Windows Media Player
+        speak("Music player has been closed.")
+    elif app_name.lower() == "whatsapp":
+        os.system("taskkill /f /im WhatsApp.exe")  # Close WhatsApp
+        speak("WhatsApp has been closed.")
+    else:
+        speak(f"Sorry, I cannot close {app_name}.")
+
+if __name__ == "__main__":
+    wish()  # This will greet the user based on the time of day
+
+    while True:  # Continuous loop
+        query = take_command()
+
+        if "set an alarm" in query:
+            speak("At what time should I set the alarm? Please say it in HH:MM or HHmm format.")
+            alarm_time = take_command()
+            set_alarm(alarm_time)
+
+        elif "play music" in query:
+            play_music()
+
+        elif "tell me a joke" in query:
+            joke = pyjokes.get_joke()
+            speak(joke)
+
+        elif "search wikipedia" in query:
+            speak("What do you want to search for on Wikipedia?")
+            search_query = take_command()
+            search_wikipedia(search_query)
+
+        elif "search youtube" in query:
+            speak("What video do you want to search for on YouTube?")
+            video_name = take_command()
+            search_youtube(video_name)
+
+        elif "google search" in query:
+            speak("What do you want to search for on Google?")
+            search_query = take_command()
+            google_search(search_query)
+
+        elif "your ip address" in query:
+            get_ip_address()
+
+        elif "open whatsapp" in query:
+            open_whatsapp()
+
+        elif "open facebook" in query:
+            open_facebook()
+
+        elif "restart " in query:
+            restart_computer()
+
+        elif "sleep " in query:
+            sleep_computer()
+
+        elif "shutdown computer" in query:
+            shutdown_computer()
+
+        elif "search chatgpt" in query:
+            speak("What do you want to search on ChatGPT?")
+            chatgpt_query = take_command()
+            search_chatgpt(chatgpt_query)
+
+        elif "open camera" in query:
+            open_camera()
+
+        elif "close" in query:  # Close an application
+            app_name = query.split("close ", 1)[-1]
+            close_application(app_name)
+
+        elif "stop" in query:
+            speak("Goodbye, sir!")
+            sys.exit()  # Exit the program
